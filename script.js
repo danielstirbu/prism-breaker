@@ -1180,9 +1180,15 @@ const Collision = {
     const p = game.paddle;
     const hitBox = Geo.circleRect(ball.x, ball.y, ball.r, p.x - p.half, p.y - p.h / 2, p.width, p.h);
     if (!hitBox) return;
-    // Only bounce when the ball is descending onto the paddle.
-    if (hitBox.ny > 0.5 || (hitBox.ny === 0 && ball.vy < 0)) {
-      if (hitBox.ny > 0.5) {
+    // Geo.circleRect returns the PUSH direction, so a ball resting on the
+    // top surface has ny = -1 (up). Route by the ball center vs the paddle
+    // midline instead of by the normal: a fast paddle swipe can bury the
+    // center inside the 16px body where the min-penetration axis flips to
+    // the horizontal — routing on the normal there ejected the ball out
+    // under the paddle ("ball passes through the paddle" bug).
+    if (hitBox.nx === 0 || Math.abs(ball.y - p.y) >= Math.abs(ball.x - p.x)) {
+      if (ball.y <= p.y) {
+        // Top-surface bounce.
         ball.y = p.y - p.h / 2 - ball.r;
         const offset = Utils.clamp((ball.x - p.x) / p.half, -1, 1);
         const angle = offset * Config.BALL.BOUNCE_OFFSET;
@@ -1193,18 +1199,13 @@ const Collision = {
         game.onPaddleTouch();
         Particles.burst(ball.x, ball.y + ball.r, '#7fe8ff', 5, { angle: -Math.PI / 2, spread: 0.9, speedMax: 160, lifeMax: 0.3 });
         if (p.sticky && ball.invuln <= 0) ball.stick(p);
-      } else if (hitBox.ny === 0) {
-        // Side swipe of the paddle edge.
-        ball.x += hitBox.nx * hitBox.pen;
-        ball.vx = Math.abs(ball.vx) * hitBox.nx;
       } else {
-        ball.y += hitBox.ny * hitBox.pen;
+        // Skimmed in from below the midline: continue downward, off the body.
+        ball.y = p.y + p.h / 2 + ball.r;
         ball.vy = Math.abs(ball.vy);
       }
-    } else if (hitBox.ny < -0.5) {
-      ball.y = p.y + p.h / 2 + ball.r;
-      ball.vy = Math.abs(ball.vy);
     } else {
+      // Side swipe of the paddle edge.
       ball.x += hitBox.nx * hitBox.pen;
       ball.vx = Math.abs(ball.vx) * hitBox.nx;
     }
@@ -2389,6 +2390,21 @@ function boot() {
         b.vy = vy;
         b.clampAngle();
       },
+      // Tagged ball for probes: track the REAL object across evaluates.
+      pokeTracked(x, y, vx, vy) {
+        const b = new Ball(x, y);
+        b.__tag = 'P';
+        Game.balls.push(b);
+        b.stuck = false;
+        b.vx = vx;
+        b.vy = vy;
+        b.clampAngle();
+      },
+      get ballP() {
+        const b = Game.balls.find((x) => x.__tag === 'P');
+        return b ? { alive: b.alive, x: b.x, y: b.y, vx: b.vx, vy: b.vy, stuck: b.stuck, inv: b.invuln } : null;
+      },
+      clearTagged() { for (const b of Game.balls) if (b.__tag) b.alive = false; },
       setLives(n) { Game.lives = n; Game.updateHud(); },
       hitBoss(dmg) {
         const boss = Game.grid.bricks.find((b) => b.alive && b.type === 'boss');
