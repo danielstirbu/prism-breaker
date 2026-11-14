@@ -95,6 +95,8 @@ const Store = {
 /* ------------------------------------------------------------------ */
 /* AudioEngine — everything synthesized with Web Audio, no assets.     */
 /* Started lazily on the first user gesture (autoplay policy).         */
+const PAD_LEVEL = 0.02;
+
 const AudioEngine = {
   ctx: null,
   master: null,
@@ -164,7 +166,11 @@ const AudioEngine = {
     if (!this.armed || !this._ensure()) return;
     const t0 = this.ctx.currentTime + at;
     const src = this.ctx.createBufferSource();
-    src.buffer = this.noiseBuf;
+    // Fresh buffer per play: one AudioBuffer driven by two overlapping
+    // sources jumps sample positions and clicks (chains of explosions).
+    const buf = this.ctx.createBuffer(1, this.noiseBuf.length, this.ctx.sampleRate);
+    buf.copyToChannel(this.noiseBuf.getChannelData(0), 0);
+    src.buffer = buf;
     const bq = this.ctx.createBiquadFilter();
     bq.type = type;
     bq.frequency.setValueAtTime(freq, t0);
@@ -224,30 +230,62 @@ const AudioEngine = {
   uiHover() { this._tone('sine', 520, 0.04, 0.08); },
 
   startPad() {
-    if (!this.armed || !this._ensure() || this.padGain) return;
+    if (!this.armed || !this._ensure()) return;
+    if (this.padGain) { // already running: just restore the level
+      this.setPadLevel(AudioEngine.muted ? 0 : PAD_LEVEL);
+      return;
+    }
     const t = this.ctx.currentTime;
     this.padGain = this.ctx.createGain();
-    this.padGain.gain.value = 0.05;
+    this.padGain.gain.setValueAtTime(0.0001, t);
+    this.padGain.gain.linearRampToValueAtTime(AudioEngine.muted ? 0 : PAD_LEVEL, t + 1.5);
     const bq = this.ctx.createBiquadFilter();
     bq.type = 'lowpass';
-    bq.frequency.value = 240;
-    [55, 82.41, 110].forEach((f, i) => {
+    bq.frequency.value = 340;
+    this.padOscs = [];
+    // Soft A-minor pad (A2 E3 A3 C4), triangle waves: a sawtooth stack at
+    // 55/82/110 Hz reads as one continuous buzz.
+    [110, 164.81, 220, 261.63].forEach((f, i) => {
       const osc = this.ctx.createOscillator();
-      osc.type = i === 2 ? 'triangle' : 'sawtooth';
+      osc.type = 'triangle';
       osc.frequency.value = f;
-      osc.detune.value = i * 4 - 4;
+      osc.detune.value = i * 3 - 4.5;
       const lfo = this.ctx.createOscillator();
       const lfoGain = this.ctx.createGain();
-      lfo.frequency.value = 0.07 + i * 0.03;
+      lfo.frequency.value = 0.06 + i * 0.02;
       lfoGain.gain.value = 3;
       lfo.connect(lfoGain);
       lfoGain.connect(osc.detune);
       lfo.start(t);
       osc.connect(bq);
       osc.start(t);
+      this.padOscs.push(osc, lfo);
     });
     bq.connect(this.padGain);
     this.padGain.connect(this.master);
+  },
+
+  stopPad() {
+    if (!this.ctx || !this.padGain) return;
+    const t = this.ctx.currentTime;
+    const pad = this.padGain;
+    const oscs = this.padOscs || [];
+    this.padGain = null;
+    this.padOscs = [];
+    pad.gain.cancelScheduledValues(t);
+    pad.gain.setTargetAtTime(0.0001, t, 0.25);
+    for (const n of oscs) { try { n.stop(t + 1.2); } catch { /* already stopped */ } }
+  },
+
+  setPadLevel(level) {
+    if (!this.ctx || !this.padGain) return;
+    const p = this.padGain.gain;
+    const t = this.ctx.currentTime;
+    // Cancel pending fade-in/out ramps first — a linearRamp in flight would
+    // otherwise overwrite the duck after it completes.
+    if (p.cancelAndHoldAtTime) p.cancelAndHoldAtTime(t);
+    else { p.cancelScheduledValues(t); p.setValueAtTime(p.value, t); }
+    p.setTargetAtTime(level, t, 0.2);
   },
 };
 
@@ -1609,6 +1647,7 @@ const Game = {
 
   toMenu() {
     this.state = 'MENU';
+    AudioEngine.stopPad();
     this._setOverlay('MENU');
     this.refreshMenuStats();
     this._resetRun();
@@ -1638,9 +1677,11 @@ const Game = {
   setPaused(paused) {
     if (paused && this.state === 'PLAYING') {
       this.state = 'PAUSED';
+      AudioEngine.setPadLevel(0);
       this._setOverlay('PAUSED');
     } else if (!paused && this.state === 'PAUSED') {
       this.state = 'PLAYING';
+      AudioEngine.setPadLevel(AudioEngine.muted ? 0 : PAD_LEVEL);
       this._setOverlay(null);
       this._last = performance.now(); // avoid a dt spike after resume
     }
@@ -2262,6 +2303,7 @@ Object.assign(Game, {
 
   _gameOver() {
     this.state = 'GAME_OVER';
+    AudioEngine.setPadLevel(0);
     Store.bestLevel = Math.max(Store.bestLevel, this.level);
     this.dom.overStats.innerHTML = this._statsHtml();
     this.dom.newRecordOver.hidden = !this.newRecord;
@@ -2271,6 +2313,7 @@ Object.assign(Game, {
 
   _victory() {
     this.state = 'VICTORY';
+    AudioEngine.setPadLevel(0);
     Store.bestLevel = Math.max(Store.bestLevel, LevelManager.count());
     this.dom.victoryStats.innerHTML = this._statsHtml();
     this.dom.newRecord.hidden = !this.newRecord;
@@ -2372,9 +2415,14 @@ function boot() {
         const boss = Game.grid.bricks.find((b) => b.alive && b.type === 'boss');
         return boss ? { hp: boss.hp, maxHp: boss.maxHp, x: boss.x, y: boss.y, w: boss.w, h: boss.h } : null;
       },
+      // Test hook: audio engine internals (probe pad lifecycle).
+      get audio() { return AudioEngine; },
       // Test helpers: deterministic power-up injection without waiting for drops.
       grantPower(type) { Game.applyPowerUp(new PowerUp(Game.paddle.x, Game.paddle.y - 60, type)); },
       forceLevel(n) { Game.loadLevel(Utils.clamp(n, 1, LevelManager.count())); Game.state = 'PLAYING'; },
+      toMenu() { Game.toMenu(); },
+      startGame() { Game.startNewGame(); },
+      setPaused(v) { Game.setPaused(v); },
       forceClear() { Game._levelClear(); },
       killAllBalls() { for (const b of Game.balls) b.alive = false; },
       dropBall(x, y) {

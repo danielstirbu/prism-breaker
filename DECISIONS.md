@@ -80,6 +80,13 @@ The brief left some details open; these are the calls I made and why.
   diminished for bad), level-clear jingle, life-lost descending sweep. The
   AudioContext starts suspended and is resumed on the first user gesture
   (autoplay policy).
+- **Ambient music is a soft triangle pad, not a sawtooth drone**: a stack of
+  detuned sawtooths at 55/82/110 Hz behind a 240 Hz lowpass is perceived as
+  one continuous buzz. The pad (A2/E3/A3/C4 triangles through a 340 Hz
+  lowpass at gain 0.02) fades in on start, ducks to silence on pause /
+  game-over / victory and stops on return to menu. Each noise SFX gets a
+  fresh buffer: two sources sharing one AudioBuffer jump sample positions
+  and click during explosion chains.
 - **Screen shake + 15% hit-stop** on explosions and life loss; shake decays
   exponentially and is capped at 14 px so the view never disorients.
 
