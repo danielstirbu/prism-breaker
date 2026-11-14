@@ -1,0 +1,12 @@
+# Brief/spec file — local only
+PROMPT.md
+
+# Playwright validation artifacts
+tools/shots/
+
+# Temporary files
+*.tmp
+*.log
+.DS_Store
+__pycache__/
+node_modules/

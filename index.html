@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="description" content="Prism Breaker — a neon synthwave arcade brick breaker built with vanilla HTML5 canvas and Web Audio.">
+<meta name="theme-color" content="#07021a">
+<title>Prism Breaker</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2307021a'/%3E%3Ccircle cx='16' cy='10' r='4' fill='%2322e8ff'/%3E%3Crect x='6' y='18' width='20' height='4' rx='2' fill='%23ff2bd6'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="stage">
+  <div id="frame">
+    <canvas id="game-canvas" aria-label="Prism Breaker game area"></canvas>
+
+    <header id="hud" aria-label="Heads up display">
+      <div class="hud-group">
+        <span class="hud-label">Score</span>
+        <span id="hud-score" class="hud-value">0</span>
+        <span class="hud-sub">Best <span id="hud-best">0</span></span>
+      </div>
+      <div class="hud-group hud-center">
+        <span class="hud-label">Level <span id="hud-level" class="hud-value inline">1</span></span>
+        <span id="hud-lives" aria-label="Lives remaining"></span>
+      </div>
+      <div class="hud-group hud-right">
+        <div class="dash-wrap" title="Dash cooldown (Shift)">
+          <span class="hud-label">Dash</span>
+          <div class="dash-track"><div id="dash-fill"></div></div>
+        </div>
+        <button id="mute-btn" type="button" aria-label="Toggle sound">&#9834;</button>
+      </div>
+    </header>
+
+    <div id="fx-list" aria-live="polite"></div>
+    <div id="combo-pop" aria-live="polite"></div>
+    <div id="boss-wrap"><span class="boss-label">BOSS</span><div class="boss-bar"><div id="boss-fill"></div></div></div>
+  </div>
+
+  <section id="overlay-menu" class="overlay visible" aria-label="Main menu">
+    <div class="panel">
+      <h1 class="title">PRISM<span>BREAKER</span></h1>
+      <p class="tagline">Ten levels of neon destruction</p>
+      <button id="start-btn" class="btn-primary" type="button">START GAME</button>
+      <div class="menu-stats">
+        <div>High Score <strong id="menu-highscore">0</strong></div>
+        <div>Best Level <strong id="menu-bestlevel">1</strong></div>
+        <div>Plays <strong id="menu-total">0</strong></div>
+      </div>
+      <h2 class="controls-title">Controls</h2>
+      <ul id="controls-list" class="controls-list"></ul>
+    </div>
+  </section>
+
+  <section id="overlay-pause" class="overlay" aria-label="Paused">
+    <div class="panel">
+      <h2 class="panel-title">PAUSED</h2>
+      <button id="pause-resume-btn" class="btn-primary" type="button">RESUME</button>
+      <button id="pause-menu-btn" class="btn-ghost" type="button">MAIN MENU</button>
+    </div>
+  </section>
+
+  <section id="overlay-clear" class="overlay banner" aria-label="Level clear">
+    <div class="banner-box">
+      <h2 class="banner-title">LEVEL CLEAR</h2>
+      <p id="clear-bonus"></p>
+    </div>
+  </section>
+
+  <section id="overlay-victory" class="overlay" aria-label="Victory">
+    <div class="panel">
+      <h2 class="panel-title win">VICTORY!</h2>
+      <div id="newrecord" class="newrecord" hidden>NEW RECORD!</div>
+      <p id="victory-stats" class="stats"></p>
+      <button id="playagain-btn" class="btn-primary" type="button">PLAY AGAIN</button>
+    </div>
+  </section>
+
+  <section id="overlay-gameover" class="overlay" aria-label="Game over">
+    <div class="panel">
+      <h2 class="panel-title over">GAME OVER</h2>
+      <div id="newrecord-over" class="newrecord" hidden>NEW RECORD!</div>
+      <p id="over-stats" class="stats"></p>
+      <button id="restart-btn" class="btn-primary" type="button">RESTART</button>
+      <button id="over-menu-btn" class="btn-ghost" type="button">MAIN MENU</button>
+    </div>
+  </section>
+</div>
+<script src="script.js"></script>
+</body>
+</html>
